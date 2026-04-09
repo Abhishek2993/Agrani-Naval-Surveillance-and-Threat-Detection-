@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AGRANI — Naval Surveillance & Threat Detection | Indian Navy</title>
+  <meta name="description" content="Real-time edge-deployed subsurface threat detection dashboard for Indian coastal and harbour naval zones." />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet.heat -->
+  <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════ TOP HEADER ═══════════════════════════════════════════ -->
+<header class="top-header">
+  <div class="header-brand">
+    <div class="brand-emblem">⚓</div>
+    <div class="brand-text">
+      <span class="brand-name">AGRANI</span>
+      <span class="brand-sub">NAVAL SURVEILLANCE & THREAT DETECTION NETWORK</span>
+    </div>
+  </div>
+
+  <div class="header-status">
+    <div class="status-pill" id="conn-status">
+      <span class="status-dot"></span>
+      <span class="status-label">CONNECTING</span>
+    </div>
+    <div class="header-stats">
+      <div class="hstat">
+        <span class="hstat-val" id="stat-nodes">0</span>
+        <span class="hstat-key">NODES</span>
+      </div>
+      <div class="hstat">
+        <span class="hstat-val critical-text" id="stat-critical">0</span>
+        <span class="hstat-key">CRITICAL</span>
+      </div>
+      <div class="hstat">
+        <span class="hstat-val high-text" id="stat-high">0</span>
+        <span class="hstat-key">HIGH</span>
+      </div>
+    </div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+</header>
+
+<!-- ═══════════════════ ALERT BANNER ══════════════════════════════════════════ -->
+<div class="alert-banner" id="alert-banner" style="display:none;">
+  <div class="alert-icon">🚨</div>
+  <div class="alert-msg" id="alert-msg">CRITICAL THREAT DETECTED</div>
+  <button class="alert-dismiss" onclick="dismissAlert()">✕</button>
+</div>
+
+<!-- ═══════════════════ MAIN LAYOUT ══════════════════════════════════════════ -->
+<div class="main-layout">
+
+  <!-- ── LEFT SIDEBAR ──────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+
+    <div class="sidebar-section">
+      <div class="section-title">
+        <span class="section-icon">📡</span> ACTIVE NODES
+        <span class="node-count" id="sidebar-node-count">0</span>
+      </div>
+      <div class="node-list" id="node-list">
+        <div class="loading-pulse">Loading nodes...</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">
+        <span class="section-icon">⚡</span> RECENT ALERTS
+      </div>
+      <div class="alert-list" id="alert-list">
+        <div class="loading-pulse">Loading alerts...</div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAP AREA ───────────────────────────────────────────────────────────── -->
+  <main class="map-container">
+    <div id="map"></div>
+
+    <!-- Map controls overlay -->
+    <div class="map-controls">
+      <button class="map-ctrl-btn" id="btn-heatmap" onclick="toggleHeatmap()" title="Toggle Heatmap">
+        🌡️ Heatmap
+      </button>
+      <button class="map-ctrl-btn" id="btn-zones" onclick="toggleZones()" title="Toggle Naval Zones">
+        🗺️ Zones
+      </button>
+      <button class="map-ctrl-btn" id="btn-refresh" onclick="manualRefresh()" title="Refresh Now">
+        🔄 Refresh
+      </button>
+    </div>
+
+    <!-- Zone legend overlay -->
+    <div class="map-legend">
+      <div class="legend-title">THREAT LEVEL</div>
+      <div class="legend-item"><span class="legend-dot low"></span>LOW</div>
+      <div class="legend-item"><span class="legend-dot medium"></span>MEDIUM</div>
+      <div class="legend-item"><span class="legend-dot high"></span>HIGH</div>
+      <div class="legend-item"><span class="legend-dot critical"></span>CRITICAL</div>
+    </div>
+
+    <!-- Refresh timer -->
+    <div class="refresh-indicator" id="refresh-indicator">
+      NEXT REFRESH <span id="refresh-countdown">5</span>s
+    </div>
+  </main>
+
+  <!-- ── RIGHT PANEL ────────────────────────────────────────────────────────── -->
+  <aside class="right-panel">
+    <div class="section-title">
+      <span class="section-icon">📊</span> SENSOR READINGS
+    </div>
+
+    <div class="selected-node-info" id="selected-node-info">
+      <div class="no-selection">← Click a map marker to view sensor details</div>
+    </div>
+
+    <div id="sensor-charts" style="display:none;">
+      <div class="chart-label">MAGNETIC INTENSITY (µT)</div>
+      <div class="chart-wrap"><canvas id="chart-magnetic"></canvas></div>
+      <div class="chart-label">DOPPLER VELOCITY (m/s)</div>
+      <div class="chart-wrap"><canvas id="chart-doppler"></canvas></div>
+      <div class="chart-label">ULTRASONIC DISTANCE (m)</div>
+      <div class="chart-wrap"><canvas id="chart-ultrasonic"></canvas></div>
+    </div>
+
+    <div class="sidebar-section" style="margin-top:16px;">
+      <div class="section-title">
+        <span class="section-icon">🧠</span> ML CLASSIFICATION
+      </div>
+      <div id="ml-panel">
+        <div class="no-selection">Select node to view ML output</div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ═══════════════════ NODE POPUP MODAL ═══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script src="js/map.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
